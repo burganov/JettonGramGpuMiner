@@ -12,16 +12,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getLiteClient = exports.getTonCenterClient = exports.getTon4ClientTonhub = exports.getTon4ClientOrbs = exports.getTon4Client = exports.intToIP = void 0;
+exports.getLiteClient = exports.getTon4Client = exports.intToIP = void 0;
 const ton_1 = require("@ton/ton");
 const axios_1 = __importDefault(require("axios"));
 const ton_lite_client_1 = require("ton-lite-client");
 const ton_access_1 = require("@orbs-network/ton-access");
 let lc4 = undefined;
 let lc = undefined;
-let lcOrbs = undefined;
-let lcHub = undefined;
-let lcToncenter = undefined;
 let createLiteClient;
 function intToIP(int) {
     const part1 = int & 255;
@@ -41,36 +38,6 @@ function getTon4Client(_configUrl) {
     });
 }
 exports.getTon4Client = getTon4Client;
-function getTon4ClientOrbs(_configUrl) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (lcOrbs) {
-            return lcOrbs;
-        }
-        lcOrbs = new ton_1.TonClient4({ endpoint: _configUrl !== null && _configUrl !== void 0 ? _configUrl : yield (0, ton_access_1.getHttpV4Endpoint)() });
-        return lcOrbs;
-    });
-}
-exports.getTon4ClientOrbs = getTon4ClientOrbs;
-function getTon4ClientTonhub(_configUrl) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (lcHub) {
-            return lcHub;
-        }
-        lcHub = new ton_1.TonClient4({ endpoint: _configUrl !== null && _configUrl !== void 0 ? _configUrl : 'https://mainnet-v4.tonhubapi.com' });
-        return lcHub;
-    });
-}
-exports.getTon4ClientTonhub = getTon4ClientTonhub;
-function getTonCenterClient(_configUrl) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (lcToncenter) {
-            return lcToncenter;
-        }
-        lcToncenter = new ton_1.TonClient({ endpoint: _configUrl !== null && _configUrl !== void 0 ? _configUrl : 'https://toncenter.com/api/v2/jsonRPC' });
-        return lcToncenter;
-    });
-}
-exports.getTonCenterClient = getTonCenterClient;
 function getLiteClient(_configUrl) {
     return __awaiter(this, void 0, void 0, function* () {
         if (lc) {

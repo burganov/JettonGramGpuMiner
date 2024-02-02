@@ -1,8 +1,5 @@
-#!/bin/bash
-npm install
+:_minerstart
+node send_universal.js --api tonhub --givers 1000 --timeout 6
+goto _minerstart
 
-
-while true; do
-  node send_universal.js --api tonhub --bin ./pow-miner-cuda --givers 1000
-  sleep 1;
-done;
+pause

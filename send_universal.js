@@ -11,7 +11,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
-var _a, _b, _c;
+var _a, _b;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.delay = exports.CallForSuccess = void 0;
 const core_1 = require("@ton/core");
@@ -36,8 +36,6 @@ const args = (0, arg_1.default)({
     '--bin': String, // cuda, opencl or path to miner
     '--gpu': Number, // gpu id, default 0
     '--timeout': Number, // Timeout for mining in seconds
-    '--allow-shards': Boolean, // if true - allows mining to other shards
-    '-c': String, // blockchain config
 });
 let givers = givers_1.givers10000;
 if (args['--givers']) {
@@ -80,29 +78,17 @@ if (args['--bin']) {
 console.log('Using bin', bin);
 const gpu = (_a = args['--gpu']) !== null && _a !== void 0 ? _a : 0;
 const timeout = (_b = args['--timeout']) !== null && _b !== void 0 ? _b : 5;
-const allowShards = (_c = args['--allow-shards']) !== null && _c !== void 0 ? _c : false;
 console.log('Using GPU', gpu);
 console.log('Using timeout', timeout);
 const mySeed = process.env.SEED;
 const totalDiff = BigInt('115792089237277217110272752943501742914102634520085823245724998868298727686144');
 let bestGiver = { address: '', coins: 0 };
-function updateBestGivers(liteClient, myAddress) {
+function updateBestGivers(liteClient) {
     return __awaiter(this, void 0, void 0, function* () {
-        const whitelistGivers = allowShards ? [...givers] : givers.filter((giver) => {
-            const shardMaxDepth = 1;
-            const giverAddress = core_1.Address.parse(giver.address);
-            const myShard = new core_1.BitReader(new core_1.BitString(myAddress.hash, 0, 1024)).loadUint(shardMaxDepth);
-            const giverShard = new core_1.BitReader(new core_1.BitString(giverAddress.hash, 0, 1024)).loadUint(shardMaxDepth);
-            if (myShard === giverShard) {
-                return true;
-            }
-            return false;
-        });
-        console.log('Whitelist: ', whitelistGivers.length);
         if (liteClient instanceof ton_1.TonClient4) {
             const lastInfo = yield CallForSuccess(() => liteClient.getLastBlock());
             let newBestGiber = { address: '', coins: 0 };
-            yield Promise.all(whitelistGivers.map((giver) => __awaiter(this, void 0, void 0, function* () {
+            yield Promise.all(givers.map((giver) => __awaiter(this, void 0, void 0, function* () {
                 const stack = yield CallForSuccess(() => liteClient.runMethod(lastInfo.last.seqno, core_1.Address.parse(giver.address), 'get_pow_params', []));
                 // const powStack = Cell.fromBase64(powInfo.result as string)
                 // const stack = parseTuple(powStack)
@@ -121,7 +107,7 @@ function updateBestGivers(liteClient, myAddress) {
         else if (liteClient instanceof ton_lite_client_1.LiteClient) {
             const lastInfo = yield liteClient.getMasterchainInfo();
             let newBestGiber = { address: '', coins: 0 };
-            yield Promise.all(whitelistGivers.map((giver) => __awaiter(this, void 0, void 0, function* () {
+            yield Promise.all(givers.map((giver) => __awaiter(this, void 0, void 0, function* () {
                 const powInfo = yield liteClient.runMethod(core_1.Address.parse(giver.address), 'get_pow_params', Buffer.from([]), lastInfo.last);
                 const powStack = core_1.Cell.fromBase64(powInfo.result);
                 const stack = (0, core_1.parseTuple)(powStack);
@@ -167,7 +153,6 @@ function getPowInfo(liteClient, address) {
 let go = true;
 let i = 0;
 function main() {
-    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         let liteClient;
         if (!args['--api']) {
@@ -177,7 +162,7 @@ function main() {
         else {
             if (args['--api'] === 'lite') {
                 console.log('Using LiteServer API');
-                liteClient = yield (0, client_1.getLiteClient)((_a = args['-c']) !== null && _a !== void 0 ? _a : 'https://ton-blockchain.github.io/global.config.json');
+                liteClient = yield (0, client_1.getLiteClient)('https://ton-blockchain.github.io/global.config.json');
             }
             else {
                 console.log('Using TonHub API');
@@ -189,16 +174,10 @@ function main() {
             workchain: 0,
             publicKey: keyPair.publicKey
         });
-        if (args['--wallet'] === 'highload') {
-            console.log('Using highload wallet', wallet.address.toString({ bounceable: false, urlSafe: true }));
-        }
-        else {
-            console.log('Using v4r2 wallet', wallet.address.toString({ bounceable: false, urlSafe: true }));
-        }
         const opened = liteClient.open(wallet);
-        yield updateBestGivers(liteClient, wallet.address);
+        yield updateBestGivers(liteClient);
         setInterval(() => {
-            updateBestGivers(liteClient, wallet.address);
+            updateBestGivers(liteClient);
         }, 1000);
         while (go) {
             const giverAddress = bestGiver.address;
@@ -229,108 +208,42 @@ function main() {
                     continue;
                 }
                 console.log(`${new Date()}:     mined`, seed, i++);
-                let w = opened;
                 let seqno = 0;
                 try {
-                    seqno = yield CallForSuccess(() => w.getSeqno());
+                    seqno = yield CallForSuccess(() => opened.getSeqno());
                 }
                 catch (e) {
                     //
                 }
-                sendMinedBoc(wallet, seqno, keyPair, giverAddress, core_1.Cell.fromBoc(mined)[0].asSlice().loadRef());
-                // for (let j = 0; j < 5; j++) {
-                //     try {
-                //         await CallForSuccess(() => {
-                //             return w.sendTransfer({
-                //                 seqno,
-                //                 secretKey: keyPair.secretKey,
-                //                 messages: [internal({
-                //                     to: giverAddress,
-                //                     value: toNano('0.05'),
-                //                     bounce: true,
-                //                     body: Cell.fromBoc(mined as Buffer)[0].asSlice().loadRef(),
-                //                 })],
-                //                 sendMode: 3 as any,
-                //             })
-                //         })
-                //         break
-                //     } catch (e) {
-                //         if (j === 4) {
-                //             throw e
-                //         }
-                //         //
-                //     }
-                // }
+                for (let j = 0; j < 5; j++) {
+                    try {
+                        yield CallForSuccess(() => {
+                            return opened.sendTransfer({
+                                seqno,
+                                secretKey: keyPair.secretKey,
+                                messages: [(0, core_1.internal)({
+                                        to: giverAddress,
+                                        value: (0, core_1.toNano)('0.05'),
+                                        bounce: true,
+                                        body: core_1.Cell.fromBoc(mined)[0].asSlice().loadRef(),
+                                    })],
+                                sendMode: 3,
+                            });
+                        });
+                        break;
+                    }
+                    catch (e) {
+                        if (j === 4) {
+                            throw e;
+                        }
+                        //
+                    }
+                }
             }
         }
     });
 }
 main();
-function sendMinedBoc(wallet, seqno, keyPair, giverAddress, boc) {
-    var _a;
-    return __awaiter(this, void 0, void 0, function* () {
-        const liteServerClient = yield (0, client_1.getLiteClient)((_a = args['-c']) !== null && _a !== void 0 ? _a : 'https://ton-blockchain.github.io/global.config.json');
-        const ton4Client = yield (0, client_1.getTon4Client)();
-        const tonOrbsClient = yield (0, client_1.getTon4ClientOrbs)();
-        const toncenterClient = yield (0, client_1.getTonCenterClient)();
-        const w1 = liteServerClient.open(wallet);
-        const w2 = ton4Client.open(wallet);
-        const w3 = tonOrbsClient.open(wallet);
-        const w4 = toncenterClient.open(wallet);
-        const wallets = [w1, w2, w3];
-        // const transferBoc = w1.createTransfer({
-        //     seqno,
-        //     secretKey: keyPair.secretKey,
-        //     messages: [internal({
-        //         to: giverAddress,
-        //         value: toNano('0.05'),
-        //         bounce: true,
-        //         body: boc,
-        //     })],
-        //     sendMode: 3 as any,
-        // })
-        // console.log('send seqno', seqno)
-        // const ext = external({
-        //     to: Address.parse(giverAddress),
-        //     body: transferBoc
-        // })
-        // const dataBoc = beginCell().store(storeMessage(ext)).endCell()
-        // toncenterClient.sendFile(dataBoc.toBoc()).then(() => {
-        //     console.log('toncenter success')
-        // }).catch(e => {
-        //     //
-        //     console.log('toncenter send error', e)
-        // })
-        // w4.sendTransfer({
-        //     seqno,
-        //     secretKey: keyPair.secretKey,
-        //     messages: [internal({
-        //         to: giverAddress,
-        //         value: toNano('0.05'),
-        //         bounce: true,
-        //         body: boc,
-        //     })],
-        //     sendMode: 3 as any,
-        // })
-        for (let i = 0; i < 3; i++) {
-            for (const w of wallets) {
-                w.sendTransfer({
-                    seqno,
-                    secretKey: keyPair.secretKey,
-                    messages: [(0, core_1.internal)({
-                            to: giverAddress,
-                            value: (0, core_1.toNano)('0.05'),
-                            bounce: true,
-                            body: boc,
-                        })],
-                    sendMode: 3,
-                }).catch(e => {
-                    //
-                });
-            }
-        }
-    });
-}
 // Function to call ton api untill we get response.
 // Because testnet is pretty unstable we need to make sure response is final
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
